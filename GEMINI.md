@@ -25,6 +25,21 @@ npm run test:watch   # Run tests in watch mode
 npm run lint         # Run ESLint
 ```
 
+## Running Debates
+
+**Quick demo** (Marx vs Wilde with custom topic):
+```bash
+npm start -- demo -t "Should AI be regulated?"
+```
+
+**Custom configuration**:
+```bash
+npm start -- run -c examples/philosophers.json
+npm start -- run -c examples/tech-ethics.json
+```
+
+See `examples/` for sample config files showing persona setup.
+
 ## Core Concepts
 
 ### Persona Agents
@@ -82,6 +97,8 @@ src/
   providers/        # LLM provider abstractions (anthropic, openai, etc.)
   training/         # Persona training data ingestion
   types/            # Shared TypeScript types
+examples/           # Sample debate configurations
+transcripts/        # Auto-saved debate transcripts (gitignored)
 ```
 
 ### Transcripts
