@@ -33,6 +33,22 @@ export interface Message {
   metadata?: Record<string, unknown>;
 }
 
+/** Scores for evaluating argument quality */
+export interface ArgumentScores {
+  argumentStrength: number; // 1-10: logical validity, evidence quality
+  persuasiveness: number; // 1-10: rhetorical effectiveness
+  factualAccuracy: number; // 1-10: accuracy of claims made
+  engagement: number; // 1-10: quality of responses to counterarguments
+}
+
+/** A position shift event */
+export interface PositionShift {
+  round: number;
+  previousPosition: string;
+  newPosition: string;
+  trigger: string; // What argument caused the shift
+}
+
 /** Position tracking for a persona during debate */
 export interface PositionSummary {
   personaId: string;
@@ -41,6 +57,8 @@ export interface PositionSummary {
   strengths: string[];
   weaknesses: string[];
   concessions: string[]; // Points they've conceded
+  scores: ArgumentScores;
+  positionShifts: PositionShift[]; // Track when positions change
 }
 
 /** Arena configuration */

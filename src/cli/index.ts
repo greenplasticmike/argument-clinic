@@ -1,9 +1,35 @@
 #!/usr/bin/env node
 
+import "dotenv/config";
 import { Command } from "commander";
+import { mkdir } from "fs/promises";
+import { join } from "path";
 import { Arena } from "../core/index.js";
 import { formatMessage, saveTranscript } from "../core/transcript.js";
-import type { PersonaDefinition, ArenaConfig } from "../types/index.js";
+import type { PersonaDefinition, ArenaConfig, Transcript } from "../types/index.js";
+
+/** Generate a filename for a transcript */
+function generateTranscriptFilename(topic: string): string {
+  const date = new Date();
+  const timestamp = date.toISOString().split("T")[0]; // YYYY-MM-DD
+  const time = date.toTimeString().split(" ")[0].replace(/:/g, "-"); // HH-MM-SS
+  const slugifiedTopic = topic
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 50);
+  return `${timestamp}_${time}_${slugifiedTopic}.md`;
+}
+
+/** Auto-save transcript to transcripts directory */
+async function autoSaveTranscript(transcript: Transcript): Promise<string> {
+  const transcriptsDir = join(process.cwd(), "transcripts");
+  await mkdir(transcriptsDir, { recursive: true });
+  const filename = generateTranscriptFilename(transcript.topic);
+  const filepath = join(transcriptsDir, filename);
+  await saveTranscript(transcript, filepath, "text");
+  return filepath;
+}
 
 const program = new Command();
 
@@ -76,10 +102,15 @@ program
     try {
       const transcript = await arena.run();
 
+      // Always auto-save transcript
+      const savedPath = await autoSaveTranscript(transcript);
+      console.log(`\nTranscript saved to ${savedPath}`);
+
+      // Also save to custom location if specified
       if (options.output) {
         const format = options.json ? "json" : "text";
         await saveTranscript(transcript, options.output, format);
-        console.log(`\nTranscript saved to ${options.output}`);
+        console.log(`Additional copy saved to ${options.output}`);
       }
     } catch (error) {
       console.error("Error running conversation:", error);
@@ -117,10 +148,15 @@ program
       await arena.initialize();
       const transcript = await arena.run();
 
+      // Always auto-save transcript
+      const savedPath = await autoSaveTranscript(transcript);
+      console.log(`\nTranscript saved to ${savedPath}`);
+
+      // Also save to custom location if specified
       if (options.output) {
         const format = options.json ? "json" : "text";
         await saveTranscript(transcript, options.output, format);
-        console.log(`\nTranscript saved to ${options.output}`);
+        console.log(`Additional copy saved to ${options.output}`);
       }
     } catch (error) {
       console.error("Error:", error);

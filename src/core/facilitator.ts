@@ -1,10 +1,22 @@
 import type {
   ArenaConfig,
+  ArgumentScores,
   Message,
   PersonaDefinition,
+  PositionShift,
   PositionSummary,
 } from "../types/index.js";
 import { createProvider, type LLMProvider } from "../providers/index.js";
+
+/** Default scores for a new participant */
+function defaultScores(): ArgumentScores {
+  return {
+    argumentStrength: 5,
+    persuasiveness: 5,
+    factualAccuracy: 5,
+    engagement: 5,
+  };
+}
 
 /** The facilitator agent that orchestrates conversations */
 export class Facilitator {
@@ -12,6 +24,7 @@ export class Facilitator {
   private config: ArenaConfig;
   private personas: PersonaDefinition[] = [];
   private positions: Map<string, PositionSummary> = new Map();
+  private roundCount: number = 0;
 
   constructor(config: ArenaConfig) {
     this.config = config;
@@ -33,6 +46,8 @@ export class Facilitator {
         strengths: [],
         weaknesses: [],
         concessions: [],
+        scores: defaultScores(),
+        positionShifts: [],
       });
     }
   }
@@ -185,6 +200,95 @@ Be fair and balanced. This is a summary, not a judgment.`;
       conversationHistory,
       "facilitator"
     );
+  }
+
+  /** Analyze positions, scores, and shifts after a round */
+  async analyzePositions(conversationHistory: Message[]): Promise<void> {
+    if (!this.provider) {
+      throw new Error("Facilitator not initialized");
+    }
+
+    this.roundCount++;
+
+    const personaNames = this.personas.map((p) => `${p.id}: ${p.name}`).join(", ");
+    const currentPositions = Array.from(this.positions.entries())
+      .map(([id, pos]) => `${pos.personaName}: "${pos.corePosition || "not yet established"}"`)
+      .join("\n");
+
+    const prompt = `${this.buildSystemPrompt()}
+
+Analyze the current state of the debate. For each participant, provide a JSON analysis.
+
+Participants: ${personaNames}
+
+Current known positions:
+${currentPositions}
+
+Respond with ONLY valid JSON in this exact format (no markdown, no explanation):
+{
+  "analyses": [
+    {
+      "personaId": "id",
+      "corePosition": "their main thesis in one sentence",
+      "strengths": ["strong point 1", "strong point 2"],
+      "weaknesses": ["weak point 1"],
+      "concessions": ["any points they conceded"],
+      "scores": {
+        "argumentStrength": 7,
+        "persuasiveness": 8,
+        "factualAccuracy": 6,
+        "engagement": 7
+      },
+      "positionShifted": false,
+      "shiftDetails": null
+    }
+  ]
+}
+
+For positionShifted, set to true only if a participant meaningfully changed their stance from their previous position. If true, include shiftDetails as {"previousPosition": "...", "newPosition": "...", "trigger": "what argument caused it"}.
+
+Scores are 1-10 where:
+- argumentStrength: logical validity, quality of evidence and reasoning
+- persuasiveness: rhetorical effectiveness, emotional resonance
+- factualAccuracy: accuracy of claims, proper use of facts/history
+- engagement: quality of responses to counterarguments, listening`;
+
+    try {
+      const response = await this.provider.generateResponse(
+        prompt,
+        conversationHistory,
+        "facilitator"
+      );
+
+      // Parse the JSON response
+      const parsed = JSON.parse(response.trim());
+
+      for (const analysis of parsed.analyses) {
+        const existing = this.positions.get(analysis.personaId);
+        if (!existing) continue;
+
+        // Update position data
+        existing.corePosition = analysis.corePosition;
+        existing.strengths = analysis.strengths || [];
+        existing.weaknesses = analysis.weaknesses || [];
+        existing.concessions = analysis.concessions || [];
+        existing.scores = analysis.scores;
+
+        // Track position shift if it occurred
+        if (analysis.positionShifted && analysis.shiftDetails) {
+          const shift: PositionShift = {
+            round: this.roundCount,
+            previousPosition: analysis.shiftDetails.previousPosition,
+            newPosition: analysis.shiftDetails.newPosition,
+            trigger: analysis.shiftDetails.trigger,
+          };
+          existing.positionShifts.push(shift);
+        }
+      }
+    } catch (error) {
+      // If JSON parsing fails, log but don't crash
+      console.error("Failed to parse position analysis:", error);
+    }
   }
 
   /** Get current position summaries */

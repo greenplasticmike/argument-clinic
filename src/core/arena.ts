@@ -23,6 +23,7 @@ export class Arena {
   private events: ArenaEvents;
   private startedAt: Date;
   private transcriptId: string;
+  private summaryText: string = "";
 
   constructor(config: ArenaConfig, events: ArenaEvents = {}) {
     this.config = config;
@@ -97,6 +98,9 @@ export class Arena {
     const response = await persona.respond(this.messages);
     roundMessages.push(this.addMessage(persona.id, persona.name, response));
 
+    // Analyze positions after each substantive exchange
+    await this.facilitator.analyzePositions(this.messages);
+
     return roundMessages;
   }
 
@@ -111,6 +115,7 @@ export class Arena {
   /** End the discussion and get summary */
   async conclude(): Promise<Message> {
     const summary = await this.facilitator.summarize(this.messages);
+    this.summaryText = summary;
     const message = this.addMessage("facilitator", "Facilitator", summary);
     this.status = "concluded";
     this.events.onStatusChange?.(this.status);
@@ -160,6 +165,7 @@ export class Arena {
       status: this.status,
       startedAt: this.startedAt,
       endedAt: this.status === "concluded" ? new Date() : undefined,
+      summary: this.summaryText || undefined,
     };
   }
 
